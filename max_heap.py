@@ -132,7 +132,7 @@ def main():
     transcripts = {}  # gene_name -> Transcript instance
     transcript_counts = {}  # gene_name -> occurrence count
 
-    filename = "C:\\Users\\adiaz\\Downloads\P42_Retina_Ribo_rep1.1_no_headers_gene_only_processed.csv"
+    filename = "example.csv"
     with open(filename, 'r') as file:
         reader = csv.DictReader(file, delimiter=',')
         for row in reader:
