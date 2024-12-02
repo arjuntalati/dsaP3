@@ -132,13 +132,13 @@ def main():
     transcripts = {}  # gene_name -> Transcript instance
     transcript_counts = {}  # gene_name -> occurrence count
 
-    filename = "example.csv"
+    filename = "samCsvs/P42_Brain_Ribo_rep1.1_no_headers_gene_only_processed.csv"
     with open(filename, 'r') as file:
         reader = csv.DictReader(file, delimiter=',')
         for row in reader:
             gene_name = row['gene_name']
             sequence = row['sequence']
-            #update transcript counts
+            # update transcript counts
             transcript_counts[gene_name] = transcript_counts.get(gene_name, 0) + 1
             # initialize Transcript instance 
             if gene_name not in transcripts:
