@@ -78,7 +78,8 @@ import csv
 def parse_csv(file_path):
     data = []
     with open(file_path, 'r') as file:
-        reader = csv.DictReader(file, delimiter='\t')
+        reader = csv.DictReader(file)
+        print(f"CSV Headers: {reader.fieldnames}")  # Debugging: print the headers
         for row in reader:
             data.append(row)
     return data
@@ -130,7 +131,7 @@ def normalize_codon_usage(codon_map):
     return normalized
 
 
-#aggregate genome-wide optimality
+# aggregate genome-wide optimality
 def aggregate_optimality(codon_map, gene_counts):
     genome_wide = HashMap()
     
@@ -173,6 +174,7 @@ if __name__ == "__main__":
     
     # parse data
     data = parse_csv(file_path)
+
     
     # initialize Codon Map
     codon_map = CodonHashMap()
