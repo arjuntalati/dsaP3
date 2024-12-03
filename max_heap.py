@@ -110,41 +110,55 @@ class Transcript:
                 usage_rate, codon = heap.extract_max()
                 optimal_codons[amino_acid] = (codon, usage_rate)
         return optimal_codons
-
+    
     def scale_usage_rates(self, scale_factor):
-        # multiply usage rates by the scale factor
         for amino_acid in self.heaps:
             heap = self.heaps[amino_acid]
             adjusted_heap = MaxHeap()
             temp_list = []
-            # extract all items, adjust usage rates, store temporarily
+            total_scaled_usage = 0
+            # extract all items, adjust usage rates, calculate total
             while not heap.is_empty():
                 usage_rate, codon = heap.extract_max()
                 adjusted_rate = usage_rate * scale_factor
+                total_scaled_usage += adjusted_rate
                 temp_list.append((adjusted_rate, codon))
-            # reinsert adjusted items
+            # normalize the adjusted rates
+            normalized_temp_list = []
             for adjusted_rate, codon in temp_list:
-                adjusted_heap.insert(codon, adjusted_rate)
+                normalized_rate = adjusted_rate / total_scaled_usage if total_scaled_usage != 0 else 0
+                normalized_temp_list.append((normalized_rate, codon))
+            # reinsert normalized items
+            for normalized_rate, codon in normalized_temp_list:
+                adjusted_heap.insert(codon, normalized_rate)
             self.heaps[amino_acid] = adjusted_heap
+
 
 
 def main():
     transcripts = {}  # gene_name -> Transcript instance
     transcript_counts = {}  # gene_name -> occurrence count
 
-    filename = "samCsvs/P42_Brain_Ribo_rep1.1_no_headers_gene_only_processed.csv"
-    with open(filename, 'r') as file:
-        reader = csv.DictReader(file, delimiter=',')
-        for row in reader:
-            gene_name = row['gene_name']
-            sequence = row['sequence']
-            # update transcript counts
-            transcript_counts[gene_name] = transcript_counts.get(gene_name, 0) + 1
-            # initialize Transcript instance 
-            if gene_name not in transcripts:
-                transcripts[gene_name] = Transcript(gene_name)
-            # add sequence to the transcript
-            transcripts[gene_name].add_sequence(sequence)
+    # list of CSV files
+    csv_files = [
+        "P42_Liver_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+        "P42_Retina_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+        # and the rest of the files...
+    ]
+
+    for filename in csv_files:
+        with open(filename, 'r', encoding='utf-8') as file:
+            reader = csv.DictReader(file, delimiter=',')
+            for row in reader:
+                gene_name = row['gene_name']
+                sequence = row['sequence']
+                # update transcript counts
+                transcript_counts[gene_name] = transcript_counts.get(gene_name, 0) + 1
+                # Initialize Transcript instance 
+                if gene_name not in transcripts:
+                    transcripts[gene_name] = Transcript(gene_name)
+                # add sequence to the transcript
+                transcripts[gene_name].add_sequence(sequence)
 
     # for each transcript, calculate usage rates
     for gene_name in transcripts:
@@ -155,17 +169,31 @@ def main():
         frequency = transcript_counts[gene_name]
         transcripts[gene_name].scale_usage_rates(frequency)
 
-    # give protein
-    protein = input("Enter the protein (transcript ID): ")
-    if protein in transcripts:
-        transcript = transcripts[protein]
+    # store optimal codons for all proteins
+    all_optimal_codons = {}
+
+    # get optimal codons for all proteins
+    for gene_name in transcripts:
+        transcript = transcripts[gene_name]
         optimal_codons = transcript.get_optimal_codons()
-        print(f"\nOptimal codons for protein {protein}:")
-        for amino_acid in sorted(optimal_codons):
-            codon, usage_rate = optimal_codons[amino_acid]
-            print(f"Amino Acid: {amino_acid}, Optimal Codon: {codon}, Usage Rate: {usage_rate:.4f}")
-    else:
-        print("Protein not found.")
+        all_optimal_codons[gene_name] = optimal_codons
+
+    # save all optimal codons
+    output_filename = "C:\\Users\\adiaz\\Downloads\\optimal_codons.csv"
+    with open(output_filename, 'w', newline='') as csvfile:
+        fieldnames = ['gene_name', 'amino_acid', 'optimal_codon', 'usage_rate']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for gene_name, codons in all_optimal_codons.items():
+            for amino_acid, (codon, usage_rate) in codons.items():
+                writer.writerow({
+                    'gene_name': gene_name,
+                    'amino_acid': amino_acid,
+                    'optimal_codon': codon,
+                    'usage_rate': f"{usage_rate:.4f}"
+                })
+
+    print(f"Optimal codons for all proteins have been saved to '{output_filename}'.")
 
 if __name__ == "__main__":
     main()
