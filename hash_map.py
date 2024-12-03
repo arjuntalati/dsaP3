@@ -1,15 +1,15 @@
-# Custom Hash Map Implementation
+
 class HashMap:
     def __init__(self, size=1000):
         self.size = size
         self.map = [None] * size
 
     def _hash(self, key):
-        """Hash function to calculate the index."""
+        """hash function to calculate the index"""
         return hash(key) % self.size
 
     def insert(self, key, value):
-        """Insert or update a key-value pair."""
+        """insert or update a key-value pair"""
         index = self._hash(key)
 
         if self.map[index] is None:
@@ -22,7 +22,7 @@ class HashMap:
             self.map[index].append([key, value])
 
     def get(self, key):
-        """Retrieve a value by key."""
+        """retrieve a value by key"""
         index = self._hash(key)
         if self.map[index] is not None:
             for pair in self.map[index]:
@@ -31,7 +31,7 @@ class HashMap:
         return None
 
     def keys(self):
-        """Get all keys."""
+        """get all keys"""
         keys = []
         for bucket in self.map:
             if bucket is not None:
@@ -40,7 +40,7 @@ class HashMap:
         return keys
 
     def items(self):
-        """Get all key-value pairs."""
+        """get all key-value pairs"""
         items = []
         for bucket in self.map:
             if bucket is not None:
@@ -49,7 +49,7 @@ class HashMap:
         return items
 
     def __repr__(self):
-        """String representation of the hash map."""
+        """string representation of the hash map"""
         result = "{"
         for bucket in self.map:
             if bucket is not None:
@@ -59,25 +59,25 @@ class HashMap:
         return result
 
 
-# Custom Codon Hash Map Implementation
+
 class CodonHashMap:
     def __init__(self):
         self.transcripts = HashMap()
 
     def update_codon(self, transcript_id, amino_acid, codon):
-        # Check if transcript exists
+        # check if transcript exists
         transcript_data = self.transcripts.get(transcript_id)
         if not transcript_data:
             transcript_data = HashMap()
             self.transcripts.insert(transcript_id, transcript_data)
 
-        # Check if amino acid exists in the transcript
+        # check if amino acid exists in the transcript
         amino_acid_data = transcript_data.get(amino_acid)
         if not amino_acid_data:
             amino_acid_data = HashMap()
             transcript_data.insert(amino_acid, amino_acid_data)
 
-        # Update codon count
+        # update codon count
         current_count = amino_acid_data.get(codon) or 0
         amino_acid_data.insert(codon, current_count + 1)
 
@@ -88,61 +88,52 @@ class CodonHashMap:
         return repr(self.transcripts)
 
 
-# Complete Codon Table
+# dictionary of codons to amino acids
 CODON_TABLE = {
-    "TTT": "F", "TTC": "F",                      # Phenylalanine
-    "TTA": "L", "TTG": "L", "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L",  # Leucine
-    "ATT": "I", "ATC": "I", "ATA": "I",          # Isoleucine
-    "ATG": "M",                                  # Methionine (Start codon)
-    "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",  # Valine
-    "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S", "AGT": "S", "AGC": "S",  # Serine
-    "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P",  # Proline
-    "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T",  # Threonine
-    "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",  # Alanine
-    "TAT": "Y", "TAC": "Y",                      # Tyrosine
-    "CAT": "H", "CAC": "H",                      # Histidine
-    "CAA": "Q", "CAG": "Q",                      # Glutamine
-    "AAT": "N", "AAC": "N",                      # Asparagine
-    "AAA": "K", "AAG": "K",                      # Lysine
-    "GAT": "D", "GAC": "D",                      # Aspartic Acid
-    "GAA": "E", "GAG": "E",                      # Glutamic Acid
-    "TGT": "C", "TGC": "C",                      # Cysteine
-    "TGG": "W",                                  # Tryptophan
-    "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R", "AGA": "R", "AGG": "R",  # Arginine
-    "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G",  # Glycine
-    "TAA": "*", "TAG": "*", "TGA": "*",          # Stop codons
+    "TTT": "F", "TTC": "F",                      
+    "TTA": "L", "TTG": "L", "CTT": "L", "CTC": "L", "CTA": "L", "CTG": "L", 
+    "ATT": "I", "ATC": "I", "ATA": "I",          
+    "ATG": "M",                           
+    "GTT": "V", "GTC": "V", "GTA": "V", "GTG": "V",  
+    "TCT": "S", "TCC": "S", "TCA": "S", "TCG": "S", "AGT": "S", "AGC": "S",  
+    "CCT": "P", "CCC": "P", "CCA": "P", "CCG": "P", 
+    "ACT": "T", "ACC": "T", "ACA": "T", "ACG": "T", 
+    "GCT": "A", "GCC": "A", "GCA": "A", "GCG": "A",  
+    "TAT": "Y", "TAC": "Y",                     
+    "CAT": "H", "CAC": "H",                     
+    "CAA": "Q", "CAG": "Q",                      
+    "AAT": "N", "AAC": "N",                      
+    "AAA": "K", "AAG": "K",                     
+    "GAT": "D", "GAC": "D",                      
+    "GAA": "E", "GAG": "E",                     
+    "TGT": "C", "TGC": "C",                     
+    "TGG": "W",                                  
+    "CGT": "R", "CGC": "R", "CGA": "R", "CGG": "R", "AGA": "R", "AGG": "R",  
+    "GGT": "G", "GGC": "G", "GGA": "G", "GGG": "G",  
+    "TAA": "*", "TAG": "*", "TGA": "*",          
 }
 
 
-# Parsing CSV File
+# arsing csv File
 import pandas as pd
 
 def parse_csv(file_path):
-<<<<<<< Updated upstream
-    data = []
-    with open(file_path, 'r') as file:
-        reader = csv.DictReader(file)
-        print(f"CSV Headers: {reader.fieldnames}")  # Debugging: print the headers
-        for row in reader:
-            data.append(row)
-=======
     """Parse the CSV file and return a DataFrame."""
     data = pd.read_csv(file_path, delimiter=',', quotechar='"')
->>>>>>> Stashed changes
     return data
 
 
-# Processing Codon Data
+# processing Codon Data
 def process_gene_data(data, codon_map, gene_counts):
     for _, row in data.iterrows():
         transcript_id = str(row['gene_name']).strip()
         sequence = str(row['sequence']).strip().upper()
 
-        # Update gene count
+        # update gene count
         current_count = gene_counts.get(transcript_id) or 0
         gene_counts.insert(transcript_id, current_count + 1)
 
-        # Split sequence into codons and update counts
+        # split sequence into codons and update counts
         codons = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3)]
         for codon in codons:
             if codon in CODON_TABLE:
@@ -152,7 +143,7 @@ def process_gene_data(data, codon_map, gene_counts):
     return gene_counts
 
 
-# Normalize Codon Usage
+# normalize Codon Usage
 def normalize_codon_usage(codon_map):
     normalized = {}
 
@@ -164,7 +155,7 @@ def normalize_codon_usage(codon_map):
                 count for _, count in amino_acid_data.items()
             )
 
-            if total_codons == 0:  # Avoid division by zero
+            if total_codons == 0:  # avoid division by zero
                 continue
 
             normalized[transcript_id][amino_acid] = {
@@ -175,17 +166,13 @@ def normalize_codon_usage(codon_map):
     return normalized
 
 
-<<<<<<< Updated upstream
 # aggregate genome-wide optimality
-=======
-# Aggregate Genome-Wide Optimality
->>>>>>> Stashed changes
 def aggregate_optimality(codon_map, gene_counts):
     genome_wide = {}
 
     for transcript_id, transcript_data in codon_map.transcripts.items():
         scale_factor = gene_counts.get(transcript_id) or 0
-        if scale_factor == 0:  # Skip transcripts with no scale factor
+        if scale_factor == 0:  # skip transcripts with no scale factor
             continue
 
         for amino_acid, amino_acid_data in transcript_data.items():
@@ -196,7 +183,7 @@ def aggregate_optimality(codon_map, gene_counts):
                 current_codon_count = genome_wide[amino_acid].get(codon, 0)
                 genome_wide[amino_acid][codon] = current_codon_count + count * scale_factor
 
-    # Find most optimal codons
+    # find most optimal codons
     optimal_codon = {}
     for amino_acid, codon_counts in genome_wide.items():
         optimal_codon[amino_acid] = max(
@@ -207,47 +194,37 @@ def aggregate_optimality(codon_map, gene_counts):
     return optimal_codon
 
 
-# Main Function
+# main function
 if __name__ == "__main__":
-<<<<<<< Updated upstream
-    file_path = "example.csv"  #example
-    
-    # parse data
-    data = parse_csv(file_path)
-
-    
-    # initialize Codon Map
-=======
     import os
     from tabulate import tabulate
 
-    # Specify the folder path containing CSV files
-    folder_path = "/Users/arjuntalati/Downloads/csv_folder"  # Replace with your actual folder path
+    # specify the folder path containing csv files
+    folder_path = "downloads/example_data"  # replace with your actual folder path
 
-    # Initialize Codon Map and Gene Counts
->>>>>>> Stashed changes
+    # initialize codon map and gene counts
     codon_map = CodonHashMap()
     gene_counts = HashMap()
 
-    # Iterate through all CSV files in the folder
+    # iterate through all csv files in the folder
     for filename in os.listdir(folder_path):
         if filename.endswith(".csv"):
             file_path = os.path.join(folder_path, filename)
-            print(f"Processing file: {file_path}")
-
-            # Parse data
+            print(f"processing file: {file_path}")
+    
+            # parse data
             data = parse_csv(file_path)
 
-            # Process data and update codon map and gene counts
+            # process data and update codon map and gene counts
             process_gene_data(data, codon_map, gene_counts)
 
-    # Normalize codon usage
+    # normalize codon usage
     normalized_usage = normalize_codon_usage(codon_map)
 
-    # Aggregate genome-wide optimality
+    # aggregate genome-wide optimality
     genome_optimality = aggregate_optimality(codon_map, gene_counts)
 
-    # Output normalized codon usage in a structured way
+    # output normalized codon usage in a structured way
     print("\nNormalized Codon Usage:")
     for transcript_id, amino_acids in normalized_usage.items():
         print(f"\nTranscript ID: {transcript_id}")
@@ -256,10 +233,10 @@ if __name__ == "__main__":
             for codon, usage in codons.items():
                 print(f"    Codon: {codon}, Usage: {usage:.3f}")
 
-    # Prepare data for tabulation
+    # prepare data for tabulation
     optimal_codons_table = [(amino_acid, codon) for amino_acid, codon in genome_optimality.items()]
     optimal_codons_table.sort()
 
-    # Output genome-wide optimal codons as a table
+    # output genome-wide optimal codons as a table
     print("\nGenome-Wide Optimal Codons:")
     print(tabulate(optimal_codons_table, headers=['Amino Acid', 'Optimal Codon'], tablefmt='grid'))
