@@ -371,4 +371,4 @@ def api_visualize():
     return jsonify({"plot_data": plot_data, "level": level})
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(port=5002, debug=True)
