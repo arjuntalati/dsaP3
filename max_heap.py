@@ -207,8 +207,10 @@
 # if __name__ == "__main__":
 #     main()
 
+
 import csv
 import os
+import time
 from collections import defaultdict
 
 # codon to amino acid mapping
@@ -276,7 +278,6 @@ class MaxHeap:
     def is_empty(self):
         return len(self.heap) == 0
 
-
 class Transcript:
     def __init__(self, gene_name):
         self.gene_name = gene_name
@@ -315,8 +316,8 @@ class Transcript:
                 optimal_codons[amino_acid] = (codon, usage_rate)
         return optimal_codons
 
-
-def process_file(filename, output_folder):
+def process_file(filename):
+    start_time = time.time()
     transcripts = {}
     transcript_counts = defaultdict(int)
 
@@ -333,21 +334,19 @@ def process_file(filename, output_folder):
     for transcript in transcripts.values():
         transcript.calculate_usage_rates()
 
-    output_filename = os.path.join(output_folder, os.path.basename(filename).replace('.csv', '_optimal_codons.csv'))
-    with open(output_filename, 'w', newline='') as csvfile:
-        fieldnames = ['gene_name', 'amino_acid', 'optimal_codon', 'usage_rate']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for gene_name, transcript in transcripts.items():
-            optimal_codons = transcript.get_optimal_codons()
-            for amino_acid, (codon, usage_rate) in optimal_codons.items():
-                writer.writerow({
-                    'gene_name': gene_name,
-                    'amino_acid': amino_acid,
-                    'optimal_codon': codon,
-                    'usage_rate': f"{usage_rate:.4f}"
-                })
+    output_data = []
+    for gene_name, transcript in transcripts.items():
+        optimal_codons = transcript.get_optimal_codons()
+        for amino_acid, (codon, usage_rate) in optimal_codons.items():
+            output_data.append({
+                'gene_name': gene_name,
+                'amino_acid': amino_acid,
+                'optimal_codon': codon,
+                'usage_rate': f"{usage_rate:.4f}"
+            })
 
+    elapsed_time = time.time() - start_time
+    return output_data, elapsed_time
 
 def main():
     csv_files = [
@@ -372,7 +371,6 @@ def main():
         process_file(filename, output_folder)
 
     print(f"Optimal codons for all files have been saved to the '{output_folder}' folder.")
-
 
 if __name__ == "__main__":
     main()

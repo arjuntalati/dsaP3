@@ -1,24 +1,121 @@
 import os
 import pandas as pd
 import circlify
-import plotly.graph_objects as go
 from flask import Flask, render_template_string, jsonify, request, redirect, url_for
+import threading
+import time
+from collections import defaultdict
+
+# data processing functions from max_heap.py
+import max_heap
 
 app = Flask(__name__)
 
-# Load all data from CSVs
-def load_data(csv_folder):
+# global variables to store processing status, times, and data
+processing_status = {}
+processing_times = {}
+processed_data = {}
+data_lock = threading.Lock()
+
+def process_files_thread(csv_files):
+    for filename in csv_files:
+        sample_name = os.path.splitext(os.path.basename(filename))[0]
+        with data_lock:
+            processing_status[sample_name] = 'Processing'
+        # process one file
+        output_data, elapsed_time = max_heap.process_file(filename)
+        with data_lock:
+            processed_data[sample_name] = output_data
+            processing_times[sample_name] = elapsed_time
+            processing_status[sample_name] = 'Completed'
+
+def load_data_from_memory():
     data = {}
-    for file_name in os.listdir(csv_folder):
-        if file_name.endswith(".csv"):
-            file_path = os.path.join(csv_folder, file_name)
-            sample_name = os.path.splitext(file_name)[0]
-            df = pd.read_csv(file_path)
-            df['sample_name'] = sample_name  # Add sample_name to DataFrame
+    with data_lock:
+        for sample_name, output_data in processed_data.items():
+            df = pd.DataFrame(output_data)
+            df['sample_name'] = sample_name
             data[sample_name] = df
     return data
 
-# Generate circle packing data
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        csv_files = [
+            "csvs/P42_Brain_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Brain_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Heart_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Heart_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Kidney_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Kidney_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Liver_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Liver_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Lung_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Lung_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Retina_Ribo_rep1.1_no_headers_gene_only_processed.csv",
+            "csvs/P42_Retina_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+        ]
+        threading.Thread(target=process_files_thread, args=(csv_files,), daemon=True).start()
+        return redirect(url_for('processing_status_page'))
+
+    return render_template_string("""
+        <h1>Start Data Processing</h1>
+        <form method="post">
+            <input type="submit" value="Process Data">
+        </form>
+    """)
+
+@app.route("/processing_status")
+def processing_status_page():
+    with data_lock:
+        status = dict(processing_status)
+        times = dict(processing_times)
+    all_completed = all(s == 'Completed' for s in status.values()) and status != {}
+    return render_template_string("""
+        <h1>Data Processing Status</h1>
+        <ul>
+            {% for sample_name, sample_status in status.items() %}
+                <li>{{ sample_name }}: {{ sample_status }}
+                    {% if sample_status == 'Completed' %}
+                        - Time taken: {{ times[sample_name]|round(2) }} seconds
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+        {% if not all_completed %}
+            <script>
+                setTimeout(function(){
+                    window.location.reload(1);
+                }, 5000);
+            </script>
+        {% else %}
+            <a href="{{ url_for('select_samples') }}">Proceed to Sample Selection</a>
+        {% endif %}
+    """, status=status, times=times, all_completed=all_completed)
+
+@app.route("/select_samples", methods=["GET", "POST"])
+def select_samples():
+    with data_lock:
+        samples = list(processed_data.keys())
+    if request.method == "POST":
+        selected_samples = request.form.getlist('samples')
+        if len(selected_samples) != 2:
+            return "Please select exactly two samples.", 400
+        # go to comparison page with selected samples
+        return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
+    return render_template_string("""
+        <h1>Select Two Samples to Compare</h1>
+        <form method="post">
+            {% for sample in samples %}
+                <input type="checkbox" name="samples" value="{{ sample }}"> {{ sample }}<br>
+            {% endfor %}
+            <br>
+            <input type="submit" value="Compare">
+            <button onclick="window.location.href='/'" type="button">Home</button>
+        </form>
+    """, samples=samples)
+
+# circle packing
 def generate_circle_packing(data, level, parent_name=None):
     next_level_map = {
         "gene_name": "amino_acid",
@@ -32,7 +129,6 @@ def generate_circle_packing(data, level, parent_name=None):
     group_col = group_col_map.get(level)
     prev_level_map = {v: k for k, v in next_level_map.items()}
 
-    # Adjusted filtering logic
     if level == "gene_name":
         filtered_data = data
     elif parent_name is not None:
@@ -45,7 +141,7 @@ def generate_circle_packing(data, level, parent_name=None):
     if filtered_data.empty:
         return None, None
 
-    # Use counts or usage_rate based on level
+    # use counts or usage_rate based on level for circle sizes
     if level == "optimal_codon":
         grouped = filtered_data.groupby(group_col).agg({"usage_rate": "sum"}).reset_index()
         size_col = 'usage_rate'
@@ -53,7 +149,7 @@ def generate_circle_packing(data, level, parent_name=None):
         grouped = filtered_data.groupby(group_col).size().reset_index(name='count')
         size_col = 'count'
 
-    # Prepare data for circlify
+    # prepare for circlify
     circle_data = [
         {"id": row[group_col], "datum": row[size_col]}
         for _, row in grouped.iterrows()
@@ -61,17 +157,16 @@ def generate_circle_packing(data, level, parent_name=None):
     if not circle_data:
         return None, None
 
-    # Generate circles
     circles = circlify.circlify(
         circle_data,
         show_enclosure=False,
         target_enclosure=circlify.Circle(x=0, y=0, r=1)
     )
 
-    # Prepare data for Plotly
+    # prepare for Plotly
     plot_data = []
     for circle in circles:
-        if circle.level != 1:  # We only need circles at level 1
+        if circle.level != 1:
             continue
         id_name = circle.ex["id"]
         plot_data.append({
@@ -85,31 +180,6 @@ def generate_circle_packing(data, level, parent_name=None):
 
     return plot_data, grouped[group_col].tolist()
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    csv_folder = "output_csvs"
-    all_data = load_data(csv_folder)
-    samples = list(all_data.keys())
-
-    if request.method == "POST":
-        # Get selected samples from form
-        selected_samples = request.form.getlist('samples')
-        if len(selected_samples) != 2:
-            return "Please select exactly two samples.", 400
-        # Redirect to compare page with selected samples
-        return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
-
-    return render_template_string("""
-        <h1>Select Two Samples to Compare</h1>
-        <form method="post">
-            {% for sample in samples %}
-                <input type="checkbox" name="samples" value="{{ sample }}"> {{ sample }}<br>
-            {% endfor %}
-            <br>
-            <input type="submit" value="Compare">
-        </form>
-    """, samples=samples)
-
 @app.route("/compare")
 def compare():
     sample1 = request.args.get('sample1')
@@ -119,7 +189,8 @@ def compare():
         return "Two samples are required for comparison.", 400
 
     return render_template_string("""
-        <button onclick="window.location.href='/'">Home</button>
+        <!-- Changed the button to go back to sample selection -->
+        <button onclick="window.location.href='{{ url_for('select_samples') }}'">Back to Sample Selection</button>
         <div id="samples-container" style="display: flex; flex-wrap: wrap;">
             <div style="margin: 20px;">
                 <h2>{{ sample1 }}</h2>
@@ -283,9 +354,6 @@ def compare():
 
 @app.route("/api/visualize")
 def api_visualize():
-    csv_folder = "output_csvs"
-    all_data = load_data(csv_folder)
-
     level = request.args.get("level", "gene_name")
     parent_name = request.args.get("parent", None)
     sample_name = request.args.get("sample", None)
@@ -293,10 +361,11 @@ def api_visualize():
     if not sample_name:
         return jsonify({"error": "Sample name is required"}), 400
 
-    if sample_name not in all_data:
-        return jsonify({"error": f"Sample '{sample_name}' not found"}), 404
-
-    data = all_data[sample_name]
+    with data_lock:
+        if sample_name not in processed_data:
+            return jsonify({"error": f"Sample '{sample_name}' not found"}), 404
+        data_list = processed_data[sample_name]
+        data = pd.DataFrame(data_list)
 
     plot_data, _ = generate_circle_packing(data, level, parent_name)
     return jsonify({"plot_data": plot_data, "level": level})
