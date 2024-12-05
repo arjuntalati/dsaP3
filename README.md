@@ -3,6 +3,7 @@ group bioinformatics project
 
 To run:
 1) Download dataset of csvs (folder called "csvs") and place that folder into your working directory.
+     https://drive.google.com/drive/u/0/folders/1pYJnURrsegqkDVwvjTr7OigkEjcqz_Tb
 2) Start running hash_map_visuals.py and max_heap_visuals.py.
    * Note: Each of these can be run individually. Just run the script and click the link given in the flask output.
    * To view everything together, follow next steps
