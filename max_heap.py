@@ -140,18 +140,16 @@ def process_file(filename):
 
 def main():
     csv_files = [
-        "csvs/P42_Brain_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Brain_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Heart_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Heart_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Kidney_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Kidney_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Liver_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Liver_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Lung_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Lung_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Retina_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-        "csvs/P42_Retina_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+        "csvs/P42_Brain_Ribo_rep1.csv",
+        "csvs/P42_Brain_Ribo_rep2.csv",
+        "csvs/P42_Heart_Ribo_rep1.csv",
+        "csvs/P42_Heart_Ribo_rep2.csv",
+        "csvs/P42_Kidney_Ribo_rep1.csv",
+        "csvs/P42_Kidney_Ribo_rep2.csv",
+        "csvs/P42_Liver_Ribo_rep1.csv",
+        "csvs/P42_Lung_Ribo_rep1.csv",
+        "csvs/P42_Lung_Ribo_rep2.csv",
+        "csvs/P42_Retina_Ribo_rep2.csv",
     ]
 
     output_folder = "output_csvs"

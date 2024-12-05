@@ -3,32 +3,37 @@ import pandas as pd
 import circlify
 from flask import Flask, render_template_string, jsonify, request, redirect, url_for
 import threading
+import json
+import gzip
+import base64
 import time
 from collections import defaultdict
 
-# data processing functions from max_heap.py
+# Import data processing functions from max_heap.py
 import max_heap
 
 app = Flask(__name__)
 
-# global variables to store processing status, times, and data
+# Global variables to store processing status, times, and data
 processing_status = {}
 processing_times = {}
 processed_data = {}
 data_lock = threading.Lock()
 
+# Function to process multiple files in a separate thread
 def process_files_thread(csv_files):
     for filename in csv_files:
         sample_name = os.path.splitext(os.path.basename(filename))[0]
         with data_lock:
             processing_status[sample_name] = 'Processing'
-        # process one file
+        # Process one file
         output_data, elapsed_time = max_heap.process_file(filename)
         with data_lock:
             processed_data[sample_name] = output_data
             processing_times[sample_name] = elapsed_time
             processing_status[sample_name] = 'Completed'
 
+# Load data from memory (if needed)
 def load_data_from_memory():
     data = {}
     with data_lock:
@@ -42,18 +47,16 @@ def load_data_from_memory():
 def index():
     if request.method == "POST":
         csv_files = [
-            "csvs/P42_Brain_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Brain_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Heart_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Heart_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Kidney_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Kidney_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Liver_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Liver_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Lung_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Lung_Ribo_rep2.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Retina_Ribo_rep1.1_no_headers_gene_only_processed.csv",
-            "csvs/P42_Retina_Ribo_rep2.1_no_headers_gene_only_processed.csv",
+            # "csvs/P42_Brain_Ribo_rep1.csv",
+            # "csvs/P42_Brain_Ribo_rep2.csv",
+            # "csvs/P42_Heart_Ribo_rep1.csv",
+            # "csvs/P42_Heart_Ribo_rep2.csv",
+            # "csvs/P42_Kidney_Ribo_rep1.csv",
+            # "csvs/P42_Kidney_Ribo_rep2.csv",
+            # "csvs/P42_Liver_Ribo_rep1.csv",
+            "csvs/P42_Lung_Ribo_rep1.csv",
+            "csvs/P42_Lung_Ribo_rep2.csv",
+            "csvs/P42_Retina_Ribo_rep2.csv",
         ]
         threading.Thread(target=process_files_thread, args=(csv_files,), daemon=True).start()
         return redirect(url_for('processing_status_page'))
@@ -101,7 +104,7 @@ def select_samples():
         selected_samples = request.form.getlist('samples')
         if len(selected_samples) != 2:
             return "Please select exactly two samples.", 400
-        # go to comparison page with selected samples
+        # Redirect to comparison page with selected samples
         return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
     return render_template_string("""
         <h1>Select Two Samples to Compare</h1>
@@ -115,71 +118,6 @@ def select_samples():
         </form>
     """, samples=samples)
 
-# circle packing
-def generate_circle_packing(data, level, parent_name=None):
-    next_level_map = {
-        "gene_name": "amino_acid",
-        "amino_acid": "optimal_codon"
-    }
-    group_col_map = {
-        "gene_name": "gene_name",
-        "amino_acid": "amino_acid",
-        "optimal_codon": "optimal_codon"
-    }
-    group_col = group_col_map.get(level)
-    prev_level_map = {v: k for k, v in next_level_map.items()}
-
-    if level == "gene_name":
-        filtered_data = data
-    elif parent_name is not None:
-        previous_level = prev_level_map.get(level)
-        prev_group_col = group_col_map.get(previous_level)
-        filtered_data = data[data[prev_group_col] == parent_name]
-    else:
-        filtered_data = data
-
-    if filtered_data.empty:
-        return None, None
-
-    # use counts or usage_rate based on level for circle sizes
-    if level == "optimal_codon":
-        grouped = filtered_data.groupby(group_col).agg({"usage_rate": "sum"}).reset_index()
-        size_col = 'usage_rate'
-    else:
-        grouped = filtered_data.groupby(group_col).size().reset_index(name='count')
-        size_col = 'count'
-
-    # prepare for circlify
-    circle_data = [
-        {"id": row[group_col], "datum": row[size_col]}
-        for _, row in grouped.iterrows()
-    ]
-    if not circle_data:
-        return None, None
-
-    circles = circlify.circlify(
-        circle_data,
-        show_enclosure=False,
-        target_enclosure=circlify.Circle(x=0, y=0, r=1)
-    )
-
-    # prepare for Plotly
-    plot_data = []
-    for circle in circles:
-        if circle.level != 1:
-            continue
-        id_name = circle.ex["id"]
-        plot_data.append({
-            "x": circle.x,
-            "y": circle.y,
-            "r": circle.r,
-            "id": id_name,
-            "datum": circle.ex["datum"],
-            "level": level
-        })
-
-    return plot_data, grouped[group_col].tolist()
-
 @app.route("/compare")
 def compare():
     sample1 = request.args.get('sample1')
@@ -188,8 +126,22 @@ def compare():
     if not sample1 or not sample2:
         return "Two samples are required for comparison.", 400
 
+    with data_lock:
+        data_sample1 = processed_data.get(sample1)
+        data_sample2 = processed_data.get(sample2)
+
+    if not data_sample1 or not data_sample2:
+        return "Sample data not found.", 404
+
+    # Compress data and encode it to base64 for safe embedding
+    data_bytes_sample1 = json.dumps(data_sample1).encode('utf-8')
+    compressed_data_sample1 = base64.b64encode(gzip.compress(data_bytes_sample1)).decode('utf-8')
+
+    data_bytes_sample2 = json.dumps(data_sample2).encode('utf-8')
+    compressed_data_sample2 = base64.b64encode(gzip.compress(data_bytes_sample2)).decode('utf-8')
+
     return render_template_string("""
-        <!-- Changed the button to go back to sample selection -->
+        <!-- Back to Sample Selection button -->
         <button onclick="window.location.href='{{ url_for('select_samples') }}'">Back to Sample Selection</button>
         <div id="samples-container" style="display: flex; flex-wrap: wrap;">
             <div style="margin: 20px;">
@@ -201,8 +153,36 @@ def compare():
                 <div id="circle-container-{{ sample2 }}"></div>
             </div>
         </div>
+
+        <!-- Include necessary libraries -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script src="https://d3js.org/d3.v6.min.js"></script>
+
+        <!-- Decompress and store data -->
         <script>
+            const compressedDataSample1 = {{ compressed_data_sample1 | tojson }};
+            const compressedDataSample2 = {{ compressed_data_sample2 | tojson }};
+
+            function decompressData(compressedData) {
+                const compressedBytes = Uint8Array.from(atob(compressedData), c => c.charCodeAt(0));
+                const decompressedBytes = pako.inflate(compressedBytes);
+                const decoder = new TextDecoder('utf-8');
+                const jsonString = decoder.decode(decompressedBytes);
+                return JSON.parse(jsonString);
+            }
+
+            const dataSample1 = decompressData(compressedDataSample1);
+            const dataSample2 = decompressData(compressedDataSample2);
+            const samplesData = {
+                "{{ sample1 }}": dataSample1,
+                "{{ sample2 }}": dataSample2
+            };
+
+            // Debugging: Log the data to ensure it's correctly decompressed
+            console.log('Data for {{ sample1 }}:', dataSample1);
+            console.log('Data for {{ sample2 }}:', dataSample2);
+
             const samples = [ "{{ sample1 }}", "{{ sample2 }}" ];
             const history = {};  // To keep track of navigation history for each sample
 
@@ -211,6 +191,101 @@ def compare():
                 history[sampleName] = [];  // Initialize history for each sample
                 loadVisualization(sampleName, 'gene_name', null, containerId);
             });
+
+            function loadVisualization(sampleName, level, parentName, containerId) {
+                // Filter data on the client side
+                const data = samplesData[sampleName];
+                const filteredData = filterData(data, level, parentName);
+                const plotData = generateCirclePacking(filteredData, level);
+
+                if (!plotData) {
+                    console.error("No data available for the selected level and parent.");
+                    return;
+                }
+
+                plotVisualization(plotData, level, parentName, sampleName, containerId);
+            }
+
+            function filterData(data, level, parentName) {
+                const nextLevelMap = {
+                    "gene_name": "amino_acid",
+                    "amino_acid": "optimal_codon"
+                };
+                const groupColMap = {
+                    "gene_name": "gene_name",
+                    "amino_acid": "amino_acid",
+                    "optimal_codon": "optimal_codon"
+                };
+                const groupCol = groupColMap[level];
+                const prevLevelMap = {};
+                for (let key in nextLevelMap) {
+                    prevLevelMap[nextLevelMap[key]] = key;
+                }
+
+                let filteredData = data;
+
+                if (level !== "gene_name" && parentName != null) {
+                    const previousLevel = prevLevelMap[level];
+                    const prevGroupCol = groupColMap[previousLevel];
+                    filteredData = data.filter(item => item[prevGroupCol] === parentName);
+                }
+
+                return filteredData;
+            }
+
+            function generateCirclePacking(data, level) {
+                if (!data || data.length === 0) return null;
+
+                const groupColMap = {
+                    "gene_name": "gene_name",
+                    "amino_acid": "amino_acid",
+                    "optimal_codon": "optimal_codon"
+                };
+                const groupCol = groupColMap[level];
+
+                // Group data
+                const groupedData = d3.rollups(
+                    data,
+                    v => ({
+                        count: v.length,
+                        usage_rate: d3.sum(v, d => d.usage_rate || 0)
+                    }),
+                    d => d[groupCol]
+                );
+
+                // Convert to hierarchical data
+                const rootData = {
+                    name: "root",
+                    children: groupedData.map(([key, value]) => ({
+                        name: key,
+                        value: level === 'optimal_codon' ? value.usage_rate : value.count
+                    }))
+                };
+
+                // Create hierarchy
+                const root = d3.hierarchy(rootData)
+                    .sum(d => d.value)
+                    .sort((a, b) => b.value - a.value);
+
+                // Create circle packing layout
+                const pack = d3.pack()
+                    .size([600, 600]) // Adjust size as needed
+                    .padding(3);
+
+                const nodes = pack(root).leaves();
+
+                // Prepare plot data
+                const plotData = nodes.map(node => ({
+                    x: node.x,
+                    y: node.y,
+                    r: node.r,
+                    id: node.data.name,
+                    datum: node.value,
+                    level: level
+                }));
+
+                return plotData;
+            }
 
             function plotVisualization(plotData, level, parentName, sampleName, containerId) {
                 const levelTitleMap = {
@@ -236,33 +311,16 @@ def compare():
                     opacity: 0.6,
                 }));
 
-                // Function to calculate font size based on circle radius and text length
-                function calculateFontSize(r, textLength) {
-                    const scalingFactor = 30; // Adjust this value as needed
-                    const fontSize = (r * scalingFactor) / textLength;
-                    const minFontSize = 6;
-                    const maxFontSize = 18;
-                    return Math.max(minFontSize, Math.min(fontSize, maxFontSize));
-                }
-
-                const annotations = plotData.map(p => {
-                    let fontSize;
-                    if (level === 'gene_name') {
-                        fontSize = calculateFontSize(p.r, p.id.length);
-                    } else {
-                        fontSize = 12; // Fixed font size for other layers
-                    }
-                    return {
-                        x: p.x,
-                        y: p.y,
-                        text: p.id,
-                        showarrow: false,
-                        font: {
-                            size: fontSize,
-                            color: 'black'
-                        },
-                    };
-                });
+                const annotations = plotData.map(p => ({
+                    x: p.x,
+                    y: p.y,
+                    text: p.id,
+                    showarrow: false,
+                    font: {
+                        size: Math.max(Math.min(p.r / 2, 18), 6),
+                        color: 'black'
+                    },
+                }));
 
                 const clickTrace = {
                     x: plotData.map(p => p.x),
@@ -324,7 +382,8 @@ def compare():
                                 loadVisualization(sampleName, previousState.level, previousState.parentName, containerId);
                             }
                         };
-                        container.parentElement.insertBefore(backButton, container);
+                        const containerParent = document.getElementById(containerId).parentElement;
+                        containerParent.insertBefore(backButton, containerParent.firstChild);
                     }
                 } else {
                     // Remove Back button if at top level
@@ -334,41 +393,10 @@ def compare():
                     }
                 }
             }
-
-            function loadVisualization(sampleName, level, parentName, containerId) {
-                let url = `/api/visualize?level=${level}&sample=${encodeURIComponent(sampleName)}`;
-                if (parentName) {
-                    url += `&parent=${encodeURIComponent(parentName)}`;
-                }
-
-                fetch(url).then(response => response.json()).then(data => {
-                    if (data.error) {
-                        console.error(data.error);
-                        return;
-                    }
-                    plotVisualization(data.plot_data, data.level, parentName, sampleName, containerId);
-                });
-            }
         </script>
-    """, sample1=sample1, sample2=sample2)
-
-@app.route("/api/visualize")
-def api_visualize():
-    level = request.args.get("level", "gene_name")
-    parent_name = request.args.get("parent", None)
-    sample_name = request.args.get("sample", None)
-
-    if not sample_name:
-        return jsonify({"error": "Sample name is required"}), 400
-
-    with data_lock:
-        if sample_name not in processed_data:
-            return jsonify({"error": f"Sample '{sample_name}' not found"}), 404
-        data_list = processed_data[sample_name]
-        data = pd.DataFrame(data_list)
-
-    plot_data, _ = generate_circle_packing(data, level, parent_name)
-    return jsonify({"plot_data": plot_data, "level": level})
+    """, sample1=sample1, sample2=sample2,
+         compressed_data_sample1=compressed_data_sample1,
+         compressed_data_sample2=compressed_data_sample2)
 
 if __name__ == "__main__":
     app.run(port=5002, debug=True)

@@ -1,178 +1,38 @@
 import os
 import pandas as pd
 import circlify
+import plotly.graph_objects as go
 from flask import Flask, render_template_string, jsonify, request, redirect, url_for
-import threading
-import time
-
-# processing functions from hash_map.py
-from hash_map import (
-    HashMap,
-    CodonHashMap,
-    CODON_TABLE,
-    parse_csv,
-    process_gene_data,
-    normalize_codon_usage,
-    aggregate_optimality
-)
 
 app = Flask(__name__)
 
-# global variables to store processing status, times, and data
-processing_status = {}
-processing_times = {}
-processed_data = {}
-data_lock = threading.Lock()
-
-# process one file
-def process_file(filename):
-    start_time = time.time()
-    codon_map = CodonHashMap()
-    gene_counts = HashMap()
-
-    data = parse_csv(filename)
-
-    # process and update codon map and gene counts
-    process_gene_data(data, codon_map, gene_counts)
-
-    # normalize codon usage
-    normalized_usage = normalize_codon_usage(codon_map)
-
-    # aggregate genome-wide optimality
-    genome_optimality = aggregate_optimality(codon_map, gene_counts)
-
-    # build output data
-    output_data = []
-    for transcript_id, amino_acids in normalized_usage.items():
-        for amino_acid, codons in amino_acids.items():
-            optimal_codon = genome_optimality.get(amino_acid)
-            for codon, usage in codons.items():
-                output_data.append({
-                    'gene_name': transcript_id,
-                    'amino_acid': amino_acid,
-                    'optimal_codon': optimal_codon,
-                    'codon': codon,
-                    'usage_rate': usage
-                })
-    elapsed_time = time.time() - start_time
-    return output_data, elapsed_time
-
-# process multiple files
-def process_files_thread(csv_files):
-    for filename in csv_files:
-        sample_name = os.path.splitext(os.path.basename(filename))[0]
-        with data_lock:
-            processing_status[sample_name] = 'Processing'
-        try:
-            output_data, elapsed_time = process_file(filename)
-            with data_lock:
-                processed_data[sample_name] = output_data
-                processing_times[sample_name] = elapsed_time
-                processing_status[sample_name] = 'Completed'
-            print(f"Completed processing {sample_name} in {elapsed_time:.2f} seconds")
-        except Exception as e:
-            with data_lock:
-                processing_status[sample_name] = f'Error: {e}'
-            print(f"Error processing {filename}: {e}")
-
-def load_data_from_memory():
+# Load all data from CSVs
+def load_data(csv_folder):
     data = {}
-    with data_lock:
-        for sample_name, output_data in processed_data.items():
-            df = pd.DataFrame(output_data)
-            df['sample_name'] = sample_name
+    for file_name in os.listdir(csv_folder):
+        if file_name.endswith(".csv"):
+            file_path = os.path.join(csv_folder, file_name)
+            sample_name = os.path.splitext(file_name)[0]
+            df = pd.read_csv(file_path)
+            df['sample_name'] = sample_name  # Add sample_name to DataFrame
             data[sample_name] = df
     return data
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        csv_files = [
-            # "csvs/P42_Brain_Ribo_rep1.csv",
-            # "csvs/P42_Brain_Ribo_rep2.csv",
-            # "csvs/P42_Heart_Ribo_rep1.csv",
-            # "csvs/P42_Heart_Ribo_rep2.csv",
-            # "csvs/P42_Kidney_Ribo_rep1.csv",
-            # "csvs/P42_Kidney_Ribo_rep2.csv",
-            # "csvs/P42_Liver_Ribo_rep1.csv",
-            "csvs/P42_Lung_Ribo_rep1.csv",
-            "csvs/P42_Lung_Ribo_rep2.csv",
-            "csvs/P42_Retina_Ribo_rep2.csv",
-        ]
-        threading.Thread(target=process_files_thread, args=(csv_files,), daemon=True).start()
-        return redirect(url_for('processing_status_page'))
-
-    return render_template_string("""
-        <h1>Start Data Processing</h1>
-        <form method="post">
-            <input type="submit" value="Process Data">
-        </form>
-    """)
-
-@app.route("/processing_status")
-def processing_status_page():
-    with data_lock:
-        status = dict(processing_status)
-        times = dict(processing_times)
-    all_completed = all('Completed' in s for s in status.values()) and status != {}
-    return render_template_string("""
-        <h1>Hash Map Data Processing Status</h1>
-        <ul>
-            {% for sample_name, sample_status in status.items() %}
-                <li>{{ sample_name }}: {{ sample_status }}
-                    {% if 'Completed' in sample_status %}
-                        - Time taken: {{ times[sample_name]|round(2) }} seconds
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
-        {% if not all_completed %}
-            <script>
-                setTimeout(function(){
-                    window.location.reload(1);
-                }, 5000);
-            </script>
-        {% else %}
-            <a href="{{ url_for('select_samples') }}">Proceed to Sample Selection</a>
-        {% endif %}
-    """, status=status, times=times, all_completed=all_completed)
-
-@app.route("/select_samples", methods=["GET", "POST"])
-def select_samples():
-    with data_lock:
-        samples = list(processed_data.keys())
-    if request.method == "POST":
-        selected_samples = request.form.getlist('samples')
-        if len(selected_samples) != 2:
-            return "Please select exactly two samples.", 400
-        # go to comparison page with selected samples
-        return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
-    return render_template_string("""
-        <h1>Select Two Samples to Compare</h1>
-        <form method="post">
-            {% for sample in samples %}
-                <input type="checkbox" name="samples" value="{{ sample }}"> {{ sample }}<br>
-            {% endfor %}
-            <br>
-            <input type="submit" value="Compare">
-            <button onclick="window.location.href='/'" type="button">Home</button>
-        </form>
-    """, samples=samples)
-
-# circle packing
+# Generate circle packing data
 def generate_circle_packing(data, level, parent_name=None):
     next_level_map = {
         "gene_name": "amino_acid",
-        "amino_acid": "codon"
+        "amino_acid": "optimal_codon"
     }
     group_col_map = {
         "gene_name": "gene_name",
         "amino_acid": "amino_acid",
-        "codon": "codon"
+        "optimal_codon": "optimal_codon"
     }
     group_col = group_col_map.get(level)
     prev_level_map = {v: k for k, v in next_level_map.items()}
 
+    # Adjusted filtering logic
     if level == "gene_name":
         filtered_data = data
     elif parent_name is not None:
@@ -185,15 +45,15 @@ def generate_circle_packing(data, level, parent_name=None):
     if filtered_data.empty:
         return None, None
 
-    # use counts or usage_rate based on level for circle sizes
-    if level == "codon":
+    # Use counts or usage_rate based on level
+    if level == "optimal_codon":
         grouped = filtered_data.groupby(group_col).agg({"usage_rate": "sum"}).reset_index()
         size_col = 'usage_rate'
     else:
         grouped = filtered_data.groupby(group_col).size().reset_index(name='count')
         size_col = 'count'
 
-    # prepare for circlify
+    # Prepare data for circlify
     circle_data = [
         {"id": row[group_col], "datum": row[size_col]}
         for _, row in grouped.iterrows()
@@ -201,16 +61,17 @@ def generate_circle_packing(data, level, parent_name=None):
     if not circle_data:
         return None, None
 
+    # Generate circles
     circles = circlify.circlify(
         circle_data,
         show_enclosure=False,
         target_enclosure=circlify.Circle(x=0, y=0, r=1)
     )
 
-    # prepare for Plotly
+    # Prepare data for Plotly
     plot_data = []
     for circle in circles:
-        if circle.level != 1:
+        if circle.level != 1:  # We only need circles at level 1
             continue
         id_name = circle.ex["id"]
         plot_data.append({
@@ -224,6 +85,31 @@ def generate_circle_packing(data, level, parent_name=None):
 
     return plot_data, grouped[group_col].tolist()
 
+@app.route("/", methods=["GET", "POST"])
+def index():
+    csv_folder = "output_csvs"
+    all_data = load_data(csv_folder)
+    samples = list(all_data.keys())
+
+    if request.method == "POST":
+        # Get selected samples from form
+        selected_samples = request.form.getlist('samples')
+        if len(selected_samples) != 2:
+            return "Please select exactly two samples.", 400
+        # Redirect to compare page with selected samples
+        return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
+
+    return render_template_string("""
+        <h1>Select Two Samples to Compare</h1>
+        <form method="post">
+            {% for sample in samples %}
+                <input type="checkbox" name="samples" value="{{ sample }}"> {{ sample }}<br>
+            {% endfor %}
+            <br>
+            <input type="submit" value="Compare">
+        </form>
+    """, samples=samples)
+
 @app.route("/compare")
 def compare():
     sample1 = request.args.get('sample1')
@@ -234,8 +120,6 @@ def compare():
 
     return render_template_string("""
         <button onclick="window.location.href='/'">Home</button>
-        <!-- Added Back to Sample Selection button -->
-        <button onclick="window.location.href='{{ url_for('select_samples') }}'">Back to Sample Selection</button>
         <div id="samples-container" style="display: flex; flex-wrap: wrap;">
             <div style="margin: 20px;">
                 <h2>{{ sample1 }}</h2>
@@ -261,7 +145,7 @@ def compare():
                 const levelTitleMap = {
                     "gene_name": "Genes",
                     "amino_acid": "Amino Acids",
-                    "codon": "Codons"
+                    "optimal_codon": "Codons"
                 };
 
                 const titleText = `${levelTitleMap[level] || level}`;
@@ -345,7 +229,7 @@ def compare():
                     const clickedName = clickedPoint.customdata[0];
                     const currentLevel = clickedPoint.customdata[1];
 
-                    const nextLevelMap = {"gene_name": "amino_acid", "amino_acid": "codon"};
+                    const nextLevelMap = {"gene_name": "amino_acid", "amino_acid": "optimal_codon"};
                     const nextLevel = nextLevelMap[currentLevel];
 
                     if (nextLevel) {
@@ -399,6 +283,9 @@ def compare():
 
 @app.route("/api/visualize")
 def api_visualize():
+    csv_folder = "output_csvs"
+    all_data = load_data(csv_folder)
+
     level = request.args.get("level", "gene_name")
     parent_name = request.args.get("parent", None)
     sample_name = request.args.get("sample", None)
@@ -406,16 +293,13 @@ def api_visualize():
     if not sample_name:
         return jsonify({"error": "Sample name is required"}), 400
 
-    with data_lock:
-        if sample_name not in processed_data:
-            return jsonify({"error": f"Sample '{sample_name}' not found"}), 404
-        data_list = processed_data[sample_name]
-        data = pd.DataFrame(data_list)
+    if sample_name not in all_data:
+        return jsonify({"error": f"Sample '{sample_name}' not found"}), 404
+
+    data = all_data[sample_name]
 
     plot_data, _ = generate_circle_packing(data, level, parent_name)
-    if plot_data is None:
-        return jsonify({"error": "No data available for the selected level and parent."}), 404
     return jsonify({"plot_data": plot_data, "level": level})
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    app.run(debug=True)
