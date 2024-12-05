@@ -88,13 +88,13 @@ def load_data_from_memory():
 def index():
     if request.method == "POST":
         csv_files = [
-            # "csvs/P42_Brain_Ribo_rep1.csv",
-            # "csvs/P42_Brain_Ribo_rep2.csv",
-            # "csvs/P42_Heart_Ribo_rep1.csv",
-            # "csvs/P42_Heart_Ribo_rep2.csv",
-            # "csvs/P42_Kidney_Ribo_rep1.csv",
-            # "csvs/P42_Kidney_Ribo_rep2.csv",
-            # "csvs/P42_Liver_Ribo_rep1.csv",
+            "csvs/P42_Brain_Ribo_rep1.csv",
+            "csvs/P42_Brain_Ribo_rep2.csv",
+            "csvs/P42_Heart_Ribo_rep1.csv",
+            "csvs/P42_Heart_Ribo_rep2.csv",
+            "csvs/P42_Kidney_Ribo_rep1.csv",
+            "csvs/P42_Kidney_Ribo_rep2.csv",
+            "csvs/P42_Liver_Ribo_rep1.csv",
             "csvs/P42_Lung_Ribo_rep1.csv",
             "csvs/P42_Lung_Ribo_rep2.csv",
             "csvs/P42_Retina_Ribo_rep2.csv",

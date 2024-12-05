@@ -9,18 +9,17 @@ import base64
 import time
 from collections import defaultdict
 
-# Import data processing functions from max_heap.py
 import max_heap
 
 app = Flask(__name__)
 
-# Global variables to store processing status, times, and data
+# global variables to store processing status, times, and data
 processing_status = {}
 processing_times = {}
 processed_data = {}
 data_lock = threading.Lock()
 
-# Function to process multiple files in a separate thread
+# process multiple files in a separate thread
 def process_files_thread(csv_files):
     for filename in csv_files:
         sample_name = os.path.splitext(os.path.basename(filename))[0]
@@ -33,7 +32,6 @@ def process_files_thread(csv_files):
             processing_times[sample_name] = elapsed_time
             processing_status[sample_name] = 'Completed'
 
-# Load data from memory (if needed)
 def load_data_from_memory():
     data = {}
     with data_lock:
@@ -47,13 +45,13 @@ def load_data_from_memory():
 def index():
     if request.method == "POST":
         csv_files = [
-            # "csvs/P42_Brain_Ribo_rep1.csv",
-            # "csvs/P42_Brain_Ribo_rep2.csv",
-            # "csvs/P42_Heart_Ribo_rep1.csv",
-            # "csvs/P42_Heart_Ribo_rep2.csv",
-            # "csvs/P42_Kidney_Ribo_rep1.csv",
-            # "csvs/P42_Kidney_Ribo_rep2.csv",
-            # "csvs/P42_Liver_Ribo_rep1.csv",
+            "csvs/P42_Brain_Ribo_rep1.csv",
+            "csvs/P42_Brain_Ribo_rep2.csv",
+            "csvs/P42_Heart_Ribo_rep1.csv",
+            "csvs/P42_Heart_Ribo_rep2.csv",
+            "csvs/P42_Kidney_Ribo_rep1.csv",
+            "csvs/P42_Kidney_Ribo_rep2.csv",
+            "csvs/P42_Liver_Ribo_rep1.csv",
             "csvs/P42_Lung_Ribo_rep1.csv",
             "csvs/P42_Lung_Ribo_rep2.csv",
             "csvs/P42_Retina_Ribo_rep2.csv",
@@ -104,7 +102,6 @@ def select_samples():
         selected_samples = request.form.getlist('samples')
         if len(selected_samples) != 2:
             return "Please select exactly two samples.", 400
-        # Redirect to comparison page with selected samples
         return redirect(url_for('compare', sample1=selected_samples[0], sample2=selected_samples[1]))
     return render_template_string("""
         <h1>Select Two Samples to Compare</h1>
@@ -133,7 +130,7 @@ def compare():
     if not data_sample1 or not data_sample2:
         return "Sample data not found.", 404
 
-    # Compress data and encode it to base64 for safe embedding
+    # compress data and encode to base64 for safe embedding
     data_bytes_sample1 = json.dumps(data_sample1).encode('utf-8')
     compressed_data_sample1 = base64.b64encode(gzip.compress(data_bytes_sample1)).decode('utf-8')
 
